@@ -21,16 +21,14 @@
  */
 package com.adevinta.spark.components.snackbars
 
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.ProvideTextStyle
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.SnackbarData
 import androidx.compose.material3.SnackbarDefaults
 import androidx.compose.material3.SnackbarDuration
@@ -41,206 +39,259 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.adevinta.spark.InternalSparkApi
-import com.adevinta.spark.LocalLegacyStyle
 import com.adevinta.spark.PreviewTheme
 import com.adevinta.spark.SparkTheme
 import com.adevinta.spark.components.buttons.BaseSparkButton
 import com.adevinta.spark.components.icons.Icon
+import com.adevinta.spark.components.icons.IconButton
+import com.adevinta.spark.components.icons.IconSize
+import com.adevinta.spark.icons.Close
 import com.adevinta.spark.icons.FlashlightFill
 import com.adevinta.spark.icons.SparkIcon
 import com.adevinta.spark.icons.SparkIcons
 import com.adevinta.spark.tokens.contentColorFor
-import com.adevinta.spark.tokens.highlight
-import com.adevinta.spark.tools.modifiers.SlotArea
 import com.adevinta.spark.tools.modifiers.sparkUsageOverlay
 import androidx.compose.material3.Snackbar as MaterialSnackBar
 
+public val SnackbarDefaults.style: SnackbarStyle
+    get() = SnackbarStyle.Tinted
+
+public val SnackbarDefaults.intent: SnackbarIntent
+    get() = SnackbarIntent.Neutral
+
 @Composable
-@InternalSparkApi
-public fun SparkSnackbar(
-    colors: SnackbarColors,
+internal fun SparkSnackbar(
+    intent: SnackbarIntent,
+    style: SnackbarStyle,
+    isActionOnNewLine: Boolean,
+    isDismissIconEnabled: Boolean,
     modifier: Modifier = Modifier,
-    actionOnNewLine: Boolean = false,
-    icon: @Composable ((iconModifier: Modifier) -> Unit)? = null,
-    title: String? = null,
+    icon: SparkIcon? = null,
     actionLabel: String? = null,
     onActionClick: (() -> Unit)? = null,
+    onDismissIconClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    val contentColor = contentColorFor(backgroundColor = colors.baseColor)
-
-    val actionComposable: (@Composable () -> Unit)? = actionLabel?.let {
-        @Composable {
-            BaseSparkButton(
-                colors = ButtonDefaults.textButtonColors(contentColor = contentColor),
-                onClick = { onActionClick?.invoke() },
-                elevation = null,
-                content = { Text(it) },
-            )
-        }
+    val backgroundColor = when (style) {
+        SnackbarStyle.Filled -> intent.filledColor
+        SnackbarStyle.Tinted -> intent.tintedColor
     }
-
-    val titleComposable: (@Composable () -> Unit)? = title?.let {
-        @Composable {
-            Text(
-                text = it,
-                maxLines = 2,
-            )
-        }
-    }
+    val contentColor = contentColorFor(backgroundColor = backgroundColor)
 
     MaterialSnackBar(
         modifier = modifier
             .padding(16.dp)
             .sparkUsageOverlay(),
-        shape = if (LocalLegacyStyle.current) SparkTheme.shapes.extraSmall else SparkTheme.shapes.small,
-        actionOnNewLine = actionOnNewLine,
-        containerColor = colors.baseColor,
+        shape = SparkTheme.shapes.medium,
+        actionOnNewLine = isActionOnNewLine,
+        containerColor = backgroundColor,
         contentColor = contentColor,
-        action = actionComposable,
+        dismissAction = getDismissIconComposable(
+            intent = intent,
+            style = style,
+            onClick = { onDismissIconClick?.invoke() },
+            isDismissIconEnabled = isDismissIconEnabled,
+        ),
+        action = getActionComposable(
+            intent = intent,
+            onClick = { onActionClick?.invoke() },
+            actionLabel = actionLabel,
+            style = style,
+            isActionOnNewLine = isActionOnNewLine,
+        ),
     ) {
-        Column {
-            ProvideTextStyle(value = SparkTheme.typography.body2.highlight) {
-                titleComposable?.invoke()
-                Spacer(Modifier.height(4.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            icon?.let {
+                Icon(
+                    sparkIcon = it,
+                    contentDescription = null, // this is a decorative icon
+                    modifier = Modifier.size(24.dp),
+                )
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (title == null) {
-                    icon?.let {
-                        it(Modifier.size(24.dp))
-                        Spacer(Modifier.width(16.dp))
-                    }
-                }
-
-                content()
-            }
+            content()
         }
     }
 }
 
+@Composable
+private fun getDismissIconComposable(
+    intent: SnackbarIntent,
+    style: SnackbarStyle,
+    onClick: () -> Unit,
+    isDismissIconEnabled: Boolean,
+): @Composable() (() -> Unit)? {
+    val dismissIconComposable: (@Composable () -> Unit)? = isDismissIconEnabled.takeIf { it }?.let {
+        {
+            val colors = IconButtonDefaults.iconButtonColors(
+                contentColor = when (style) {
+                    SnackbarStyle.Filled -> contentColorFor(backgroundColor = intent.filledColor)
+                    SnackbarStyle.Tinted -> contentColorFor(backgroundColor = intent.tintedColor)
+                },
+            )
+            IconButton(
+                colors = colors,
+                modifier = Modifier.padding(end = 8.dp),
+                onClick = { onClick.invoke() },
+            ) {
+                Icon(
+                    size = IconSize.Small,
+                    sparkIcon = SparkIcons.Close,
+                    contentDescription = null, // this is a decorative icon)
+                )
+            }
+        }
+    }
+    return dismissIconComposable
+}
+
+@Composable
+private fun getActionComposable(
+    intent: SnackbarIntent,
+    onClick: () -> Unit,
+    style: SnackbarStyle,
+    actionLabel: String? = null,
+    isActionOnNewLine: Boolean = false,
+): @Composable() (() -> Unit)? {
+    val actionComposable: (@Composable () -> Unit)? = actionLabel?.let {
+        {
+            val colors = ButtonDefaults.textButtonColors(
+                contentColor = when (style) {
+                    SnackbarStyle.Filled -> contentColorFor(backgroundColor = intent.filledColor)
+                    SnackbarStyle.Tinted -> contentColorFor(backgroundColor = intent.tintedColor)
+                },
+            )
+
+            val buttonModifier = when {
+                isActionOnNewLine -> Modifier
+                    .fillMaxWidth(0.8f)
+                    .wrapContentWidth(Alignment.End)
+
+                else -> Modifier
+            }
+
+            BaseSparkButton(
+                modifier = buttonModifier,
+                colors = colors,
+                onClick = { onClick.invoke() },
+                elevation = null,
+                content = { Text(actionLabel) },
+            )
+        }
+    }
+
+    return actionComposable
+}
+
 /**
+ * Snackbar component with support for various styles and intents.
  *
- * Snackbars provide brief messages about app processes at the bottom of the screen.
- *
- * Snackbars inform users of a process that an app has performed or will perform. They appear
- * temporarily, towards the bottom of the screen. They shouldn’t interrupt the user experience,
- * and they don’t require user input to disappear.
- *
- * A Snackbar can contain a single action. Because Snackbar disappears automatically, the action
- * shouldn't be "Dismiss" or "Cancel".
- *
- * If you want to customize appearance of the [Snackbar], you can pass your own version as a child
- * of the [SnackbarHost] to the [Scaffold]
- *
- * @param modifier modifiers for the Snackbar layout
- * @param colors colors used for the background and the content defined in [SnackbarDefaults], can either be
- * default, error or valid.
- * @param actionOnNewLine whether or not action should be put on the separate line. Recommended
- * for action with long action text
- * @param icon icon to be shown on the start side of the content when there's no title.
- * @param title title to be shown above the [content], currently the SnackBarHost doesn't handle it so avoid using it
- * @param actionLabel action to add as an action to the snackbar.
- * @param onActionClick callback when the action is clicked.
- * @param content content to show information about a process that an app has performed or will
- * perform
+ * @param intent The intent of the Snackbar.
+ * @param style The style of the Snackbar.
+ * @param isActionOnNewLine Whether the action is displayed on a new line.
+ * @param isDismissIconEnabled Whether the dismiss icon is enabled.
+ * @param modifier Modifier to apply to the Snackbar.
+ * @param icon Optional icon to display in the Snackbar.
+ * @param actionLabel Label for the action button.
+ * @param onActionClick Callback for action button click.
+ * @param onDismissIconClick Callback for dismiss icon click.
+ * @param content Content to display inside the Snackbar.
  */
 @Composable
 public fun Snackbar(
     modifier: Modifier = Modifier,
-    colors: SnackbarColors = SnackbarColors.Default,
-    actionOnNewLine: Boolean = false,
-    icon: @Composable ((iconModifier: Modifier) -> Unit)? = null,
-    title: String? = null,
+    intent: SnackbarIntent = SnackbarDefaults.intent,
+    style: SnackbarStyle = SnackbarDefaults.style,
+    isActionOnNewLine: Boolean = false,
+    isDismissIconEnabled: Boolean = false,
+    icon: SparkIcon? = null,
     actionLabel: String? = null,
     onActionClick: (() -> Unit)? = null,
+    onDismissIconClick: (() -> Unit)? = null,
     content: @Composable (() -> Unit),
 ) {
     SparkSnackbar(
-        colors = colors,
+        intent = intent,
+        style = style,
         modifier = modifier,
-        actionOnNewLine = actionOnNewLine,
+        isActionOnNewLine = isActionOnNewLine,
+        isDismissIconEnabled = isDismissIconEnabled,
         icon = icon,
-        title = title,
         actionLabel = actionLabel,
         onActionClick = onActionClick,
+        onDismissIconClick = onDismissIconClick,
         content = content,
     )
 }
 
+/**
+ * Snackbar component with support for various styles and intents.
+ *
+ * @param data The SnackbarData to display.
+ * @param modifier Modifier to apply to the Snackbar.
+ */
 @Composable
 public fun Snackbar(
     data: SnackbarData,
     modifier: Modifier = Modifier,
-    actionOnNewLine: Boolean = false,
 ) {
     val visuals = data.visuals
     val sparkVisuals = data.visuals as? SnackbarSparkVisuals
 
-    val iconComposable: (@Composable (iconModifier: Modifier) -> Unit)? = sparkVisuals?.icon?.let { icon ->
-        @Composable {
-            Icon(icon, modifier = it, contentDescription = null)
-        }
-    }
-
     SparkSnackbar(
-        colors = sparkVisuals?.colors ?: SnackbarColors.Default,
+        intent = sparkVisuals?.intent ?: SnackbarDefaults.intent,
+        style = sparkVisuals?.style ?: SnackbarDefaults.style,
         modifier = modifier,
-        actionOnNewLine = actionOnNewLine,
-        icon = iconComposable,
-        title = sparkVisuals?.title,
+        isActionOnNewLine = sparkVisuals?.isActionOnNewLine ?: false,
+        isDismissIconEnabled = sparkVisuals?.isDismissIconEnabled ?: false,
+        icon = sparkVisuals?.icon,
         actionLabel = visuals.actionLabel,
         onActionClick = { data.performAction() },
+        onDismissIconClick = { data.dismiss() },
     ) { Text(visuals.message) }
 }
 
+/**
+ * SnackBARVisuals interface that defines the visuals for a Snackbar.
+ *
+ * This is a convenience function for creating a Snackbar with a message and an action.
+ * @param message The message to display in the Snackbar.
+ * @param icon Optional icon to display in the Snackbar.
+ * @param intent The intent of the Snackbar.
+ * @param style The style of the Snackbar.
+ * @param actionLabel Label for the action button.
+ * @param isDismissIconEnabled Whether the dismiss icon is enabled.
+ * @param duration The duration of the Snackbar.
+ */
 public class SnackbarSparkVisuals(
     override val message: String,
-    public val title: String? = null,
     public val icon: SparkIcon? = null,
-    public val colors: SnackbarColors = SnackbarColors.Default,
+    public val intent: SnackbarIntent = SnackbarDefaults.intent,
+    public val style: SnackbarStyle = SnackbarDefaults.style,
     override val actionLabel: String? = null,
-    override val withDismissAction: Boolean = false,
+    public val isDismissIconEnabled: Boolean = false,
+    public val isActionOnNewLine: Boolean = false,
     override val duration: SnackbarDuration = SnackbarDuration.Short,
-) : SnackbarVisuals
-
-private const val StubTitle = "Title"
-private const val StubBodyShort = "Lorem ipsum dolor sit amet"
-private const val StubBody = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi lacus dolorsnx -d"
-private const val StubBodyLong = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi lacus dolor, " +
-    "pulvinar eu nulla sit amet, iaculis interdum."
-private const val StubAction = "Action"
-
-@Preview(
-    group = "Snackbar",
-    name = "Snackbar",
-)
-@Composable
-private fun SnackbarPreview() {
-    PreviewTheme {
-        SparkSnackbar(
-            colors = SnackbarColors.Default,
-            icon = { iconModifier ->
-                SlotArea(
-                    color = LocalContentColor.current,
-                ) {
-                    Icon(SparkIcons.FlashlightFill, contentDescription = null, modifier = iconModifier)
-                }
-            },
-            actionLabel = StubAction,
-        ) {
-            SlotArea(color = LocalContentColor.current) {
-                Text(StubBodyShort)
-            }
-        }
-    }
+) : SnackbarVisuals {
+    override val withDismissAction: Boolean
+        get() = isDismissIconEnabled
 }
+
+/***
+ * Preview
+ */
+internal const val StubBodyShort = "Lorem ipsum dolor sit amet"
+internal const val StubBody = "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+internal const val StubBodyLong = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi lacus dolor, "
+internal const val StubAction = "Action"
 
 @Preview
 @Composable
 private fun BodySnackbarPreview() {
     PreviewTheme {
-        Snackbar(colors = SnackbarColors.Default) {
+        Snackbar {
             Text(StubBodyShort)
         }
     }
@@ -250,7 +301,7 @@ private fun BodySnackbarPreview() {
 @Composable
 private fun BodyLongSnackbarPreview() {
     PreviewTheme {
-        Snackbar(colors = SnackbarColors.Default) {
+        Snackbar {
             Text(StubBody, maxLines = 2)
         }
     }
@@ -261,7 +312,7 @@ private fun BodyLongSnackbarPreview() {
 private fun BodyActionSnackbarPreview() {
     PreviewTheme {
         Snackbar(
-            colors = SnackbarColors.Default,
+            style = SnackbarStyle.Filled,
             actionLabel = StubAction,
         ) {
             Text(StubBodyShort)
@@ -274,10 +325,8 @@ private fun BodyActionSnackbarPreview() {
 private fun BodyIconActionSnackbarPreview() {
     PreviewTheme {
         Snackbar(
-            colors = SnackbarColors.Default,
-            icon = { iconModifier ->
-                Icon(SparkIcons.FlashlightFill, contentDescription = null, modifier = iconModifier)
-            },
+            style = SnackbarStyle.Filled,
+            icon = SparkIcons.FlashlightFill,
             actionLabel = StubAction,
         ) {
             Text(StubBodyShort)
@@ -290,10 +339,9 @@ private fun BodyIconActionSnackbarPreview() {
 private fun BodyIconSnackbarPreview() {
     PreviewTheme {
         Snackbar(
-            colors = SnackbarColors.Default,
-            icon = { iconModifier ->
-                Icon(SparkIcons.FlashlightFill, contentDescription = null, modifier = iconModifier)
-            },
+            intent = SnackbarIntent.Error,
+            isDismissIconEnabled = true,
+            icon = SparkIcons.FlashlightFill,
         ) {
             Text(StubBodyShort)
         }
@@ -302,67 +350,17 @@ private fun BodyIconSnackbarPreview() {
 
 @Preview
 @Composable
-private fun BodyIconActionNewLineSnackbarPreview() {
+private fun BodyIconActionNewLineLongSnackbarPreview() {
     PreviewTheme {
         Snackbar(
-            colors = SnackbarColors.Default,
-            actionOnNewLine = true,
-            icon = { iconModifier ->
-                Icon(SparkIcons.FlashlightFill, contentDescription = null, modifier = iconModifier)
-            },
-            actionLabel = StubAction,
+            intent = SnackbarIntent.SurfaceInverse,
+            isDismissIconEnabled = true,
+            isActionOnNewLine = true,
+            style = SnackbarStyle.Tinted,
+            icon = SparkIcons.FlashlightFill,
+            actionLabel = StubBodyLong,
         ) {
             Text(StubBody)
-        }
-    }
-}
-
-@Preview
-@Composable
-private fun BodyTitleSnackbarPreview() {
-    PreviewTheme {
-        Snackbar(
-            colors = SnackbarColors.Default,
-            icon = { iconModifier ->
-                Icon(SparkIcons.FlashlightFill, contentDescription = null, modifier = iconModifier)
-            },
-            title = StubTitle,
-        ) {
-            Text(StubBodyShort)
-        }
-    }
-}
-
-@Preview
-@Composable
-private fun BodyLongTitleSnackbarPreview() {
-    PreviewTheme {
-        Snackbar(
-            colors = SnackbarColors.Default,
-            icon = { iconModifier ->
-                Icon(SparkIcons.FlashlightFill, contentDescription = null, modifier = iconModifier)
-            },
-            title = StubTitle,
-        ) {
-            Text(StubBody + StubBody)
-        }
-    }
-}
-
-@Preview
-@Composable
-private fun BodyTitleActionSnackbarPreview() {
-    PreviewTheme {
-        Snackbar(
-            colors = SnackbarColors.Default,
-            actionOnNewLine = true,
-            icon = { iconModifier ->
-                Icon(SparkIcons.FlashlightFill, contentDescription = null, modifier = iconModifier)
-            },
-            title = StubTitle,
-            actionLabel = StubAction,
-        ) {
-            Text(StubBodyShort)
         }
     }
 }
